@@ -1,9 +1,9 @@
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:translator/translator.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
@@ -28,707 +28,600 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.grey[900],
         useMaterial3: true,
       ),
-      home: const MyHomePage(),
+      home: const NewHomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key});
+class NewHomePage extends StatefulWidget {
+  const NewHomePage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<NewHomePage> createState() => _NewHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  List<String> incomingText = [
+class _NewHomePageState extends State<NewHomePage> {
+  double heightOfMiddleContainer = 50;
+
+  // if userMode is true = first user, false = second user
+  // first user bottom part of the screen and second user top part of the screen
+  bool userMode = true;
+  List<String> firstUserInputs = [
     'Hello, how are you?',
     'I am fine, thank you.',
     'What are you doing?',
     'I am learning to use Text to Speech.',
     'That is great.'
   ];
-  int incomingTextIndex = 0;
-  List<String> outgoingText = [];
-  int outgoingTextIndex = 0;
+  List<String> secondUserInputs = [
+    '¿Hola, cómo estás?',
+    'Estoy bien gracias.',
+    '¿Qué estás haciendo?',
+    'Estoy aprendiendo a utilizar Texto a Voz.',
+    "Eso es genial."
+  ];
+  List<String> translatedFirstUserInputs = [];
+  List<String> translatedSecondUserInputs = [];
+  List<String> firstUserListView = [];
+  List<String> secondUserListView = [];
+  int userModeIndex = 0;
   int volume = 100;
   int pitch = 75;
   int rate = 50;
   bool isPlaying = false;
-  TextEditingController textController = TextEditingController();
   FlutterTts flutterTts = FlutterTts();
-  List<String> fromLanguages = <String>[
+  GoogleTranslator translator = GoogleTranslator();
+  List<String> languages = <String>[
+    'tr-TR',
     'en-US',
     'es-ES',
-    'fr-FR',
     'de-DE',
-    'it-IT',
-    'ja-JP',
-    'ko-KR',
-    'zh-CN',
-    'ru-RU',
-    'pt-PT',
-    'ar-SA',
-    'hi-IN',
-    'tr-TR',
-    'vi-VN',
-    'th-TH',
-    'nl-NL',
-    'pl-PL',
-    'sv-SE',
-    'cs-CZ',
-    'da-DK',
-    'fi-FI',
-    'el-GR',
-    'hu-HU',
-    'no-NO',
-    'sk-SK',
-    'uk-UA',
-    'id-ID',
-    'ms-MY',
-    'fil-PH',
-    'he-IL',
-    'ro-RO',
-    'sl-SI',
-    'hr-HR',
-    'ca-ES',
-    'eu-ES',
-    'gl-ES',
-    'is-IS',
-    'mk-MK',
-    'mt-MT',
-    'lv-LV',
-    'et-EE',
+    'ru-RU'
   ];
-  List<String> toLanguages = <String>[
-    'en-US',
-    'es-ES',
-    'fr-FR',
-    'de-DE',
-    'it-IT',
-    'ja-JP',
-    'ko-KR',
-    'zh-CN',
-    'ru-RU',
-    'pt-PT',
-    'ar-SA',
-    'hi-IN',
-    'tr-TR',
-    'vi-VN',
-    'th-TH',
-    'nl-NL',
-    'pl-PL',
-    'sv-SE',
-    'cs-CZ',
-    'da-DK',
-    'fi-FI',
-    'el-GR',
-    'hu-HU',
-    'no-NO',
-    'sk-SK',
-    'uk-UA',
-    'id-ID',
-    'ms-MY',
-    'fil-PH',
-    'he-IL',
-    'ro-RO',
-    'sl-SI',
-    'hr-HR',
-    'ca-ES',
-    'eu-ES',
-    'gl-ES',
-    'is-IS',
-    'mk-MK',
-    'mt-MT',
-    'lv-LV',
-    'et-EE',
-  ];
-  String fromCode = 'en-US';
-  String toCode = 'es-ES';
-  final ScrollController _controller = ScrollController();
-  final SpeechToText _speechToText = SpeechToText();
+  String firstUserLanguage = 'tr-TR';
+  String secondUserLanguage = 'es-ES';
+  final ScrollController _firstUserScrollController = ScrollController();
+  final ScrollController _secondUserScrollController = ScrollController();
+  final SpeechToText _speechtotext = SpeechToText();
   bool _speechEnabled = false;
-  String _lastWords = '';
+
+  bool _isListening = false;
+  String _wordsSpoken = '';
+  String _selectedLocaleId = 'tr_TR';
+  Timer? _timer;
+  final List<String> _localeID = ['tr-TR', 'en-US', 'es-ES', 'de-DE', 'ru-RU'];
 
   @override
   void initState() {
     super.initState();
-    _speechEnabled = false;
-    //play();
+    initTts();
+    _alwaysOnSpeaking();
+    translateAll();
     _initSpeech();
-    flutterTts.setLanguage(toCode);
-    flutterTts.setVolume(volume / 100);
-    flutterTts.setPitch(pitch / 100);
-    flutterTts.setSpeechRate(rate / 100);
-    translateTexts(incomingText, toCode);
   }
 
-  void _initSpeech() async {
-    bool hasSpeech = await _speechToText.initialize(
-      onStatus: (status) {
-        print('Status: $status');
-      },
-      onError: (error) {
-        print('Error: $error');
-      },
-    );
-    if (hasSpeech) {
-      print('Speech is available');
-    } else {
-      print('Speech is not available');
+  printLocales() async {
+    var locales = await _speechtotext.locales();
+    for (var local in locales) {
+      debugPrint(local.name);
+      debugPrint(local.localeId);
     }
   }
 
+  void _initSpeech() async {
+    _speechEnabled = await _speechtotext.initialize();
+    setState(() {});
+  }
+
   void _startListening() async {
-    await _speechToText.listen(onResult: _onSpeechResult);
-    
+    setState(() {
+      _isListening = true;
+    });
+
+    while (_isListening) {
+      await _speechtotext.listen(
+        onResult: _onSpeechResult,
+        onSoundLevelChange: _onSoundLevelChange,
+        localeId: _selectedLocaleId,
+      );
+
+      await Future.delayed(const Duration(seconds: 1));
+    }
   }
 
   void _stopListening() async {
-    await _speechToText.stop();
     setState(() {
-      _speechEnabled = false;
-      incomingText.add(_lastWords);
-      translateText(_lastWords, toCode);
+      _isListening = false;
     });
+    _speechtotext.stop();
   }
 
-  /// This is the callback that the SpeechToText plugin calls when
-  /// the platform returns recognized words.
-  void _onSpeechResult(SpeechRecognitionResult result) {
+  void _onSoundLevelChange(double level) {
+    if (_timer != null && _timer!.isActive) {
+      _timer!.cancel();
+    }
+    _timer = Timer(const Duration(milliseconds: 500), _onTimeout);
+  }
+
+  void _onTimeout() {
+    debugPrint(_wordsSpoken);
+    if (_wordsSpoken.isNotEmpty) {
+      debugPrint(_wordsSpoken);
+      setState(() {
+        if (userMode) {
+          firstUserInputs.add(_wordsSpoken);
+        } else {
+          secondUserInputs.add(_wordsSpoken);
+        }
+        _wordsSpoken = '';
+      });
+      translateAll();
+    }
+  }
+
+  void _onSpeechResult(result) {
     setState(() {
-      _lastWords = result.recognizedWords;
-      _speechEnabled = false;
+      _wordsSpoken = result.recognizedWords;
     });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    flutterTts.stop();
     super.dispose();
   }
 
-  void translateTexts(List<String> text, String to) async {
-    final translator = GoogleTranslator();
-    for (int i = 0; i < text.length; i++) {
-      final translation =
-          await translator.translate(text[i], to: to.split('-')[0]);
-      setState(() {
-        outgoingText.add(translation.text);
-      });
+  Future<void> initTts() async {
+    await flutterTts.setVolume(volume / 100);
+    await flutterTts.setSpeechRate(rate / 100);
+    await flutterTts.setPitch(pitch / 100);
+    await flutterTts.setLanguage(secondUserLanguage);
+  }
+
+  Future _alwaysOnSpeaking() async {
+    while (true) {
+      if (isPlaying) {
+        if (userMode) {
+          print(translatedFirstUserInputs[userModeIndex]);
+          await flutterTts.speak(translatedFirstUserInputs[userModeIndex]);
+          await Future.delayed(Duration(
+              seconds:
+                  ((translatedFirstUserInputs[userModeIndex].length ~/ 7))));
+          setState(() {
+            userModeIndex++;
+            if (userModeIndex >= translatedFirstUserInputs.length) {
+              setState(() {
+                userModeIndex = 0;
+                isPlaying = false;
+              });
+            }
+          });
+        } else {
+          print(translatedSecondUserInputs[userModeIndex]);
+          await flutterTts.speak(translatedSecondUserInputs[userModeIndex]);
+          await Future.delayed(Duration(
+              seconds: translatedFirstUserInputs[userModeIndex].length ~/ 7));
+          setState(() {
+            userModeIndex++;
+            if (userModeIndex >= translatedSecondUserInputs.length) {
+              setState(() {
+                userModeIndex = 0;
+                isPlaying = false;
+              });
+            }
+          });
+        }
+      } else {
+        await Future.delayed(const Duration(seconds: 2));
+      }
     }
   }
 
-  void translateText(String text, String to) async {
-    final translator = GoogleTranslator();
-    final translation = await translator.translate(text, to: to.split('-')[0]);
+  void changeTTSLanguage(String language) async {
+    await flutterTts.setLanguage(language);
+  }
+
+  void changeSecondUserLanguage(String language) {
     setState(() {
-      outgoingText.add(translation.text);
+      secondUserLanguage = language;
+    });
+  }
+
+  void changeFirstUserLanguage(String language) {
+    setState(() {
+      firstUserLanguage = language;
+    });
+  }
+
+  void translateAll() {
+    translateAllFirstUserInputs();
+    translateAllSecondUserInputs();
+    setState(() {
+      if (userMode) {
+        firstUserListView = firstUserInputs;
+        secondUserListView = translatedFirstUserInputs;
+      } else {
+        secondUserListView = secondUserInputs;
+        firstUserListView = translatedSecondUserInputs;
+      }
+    });
+  }
+
+  void changeUserMode() {
+    setState(() {
+      userMode = !userMode;
+    });
+  }
+
+  void translateAllFirstUserInputs() {
+    clearTranslatedFirstUserInputs();
+    for (int i = 0; i < firstUserInputs.length; i++) {
+      translatedFirstUserInputs.add('');
+    }
+    print("First user inputs length1: ${firstUserInputs.length}");
+    for (int i = 0; i < firstUserInputs.length; i++) {
+      translateFirstUserInput(firstUserInputs[i], i);
+    }
+    print("First user inputs length2: ${firstUserInputs.length}");
+  }
+
+  void translateAllSecondUserInputs() {
+    clearTranslatedSecondUserInputs();
+    for (int i = 0; i < secondUserInputs.length; i++) {
+      translatedSecondUserInputs.add('');
+    }
+    for (int i = 0; i < secondUserInputs.length; i++) {
+      translateSecondUserInput(secondUserInputs[i], i);
+    }
+  }
+
+  void clearTranslatedFirstUserInputs() {
+    setState(() {
+      translatedFirstUserInputs.clear();
+    });
+  }
+
+  void clearTranslatedSecondUserInputs() {
+    setState(() {
+      translatedSecondUserInputs.clear();
+    });
+  }
+
+  void translateFirstUserInput(String input, int index) async {
+    Translation translation =
+        await translator.translate(input, to: secondUserLanguage.split('-')[0]);
+    addTranslatedFirstUserInput(translation.text, index);
+  }
+
+  void translateSecondUserInput(String input, int index) async {
+    Translation translation =
+        await translator.translate(input, to: firstUserLanguage.split('-')[0]);
+    addTranslatedSecondUserInput(translation.text, index);
+  }
+
+  void addTranslatedFirstUserInput(String input, int index) {
+    setState(() {
+      translatedFirstUserInputs[index] = input;
+    });
+  }
+
+  void addTranslatedSecondUserInput(String input, int index) {
+    setState(() {
+      translatedSecondUserInputs[index] = input;
+    });
+  }
+
+  void changeLocale(int index) {
+    setState(() {
+      _selectedLocaleId = _localeID[index];
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        extendBodyBehindAppBar: false,
-        extendBody: false,
-        floatingActionButton: Padding(
-          padding: const EdgeInsets.only(left: 32.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              FloatingActionButton(
-                onPressed: () async {
-                  setState(() {
-                    _speechEnabled = !_speechEnabled;
-                  });
-                  print('Speech: $_speechEnabled');
-                  if (_speechEnabled) {
-                    _startListening();
-                  } else {
-                    _stopListening();
-                  }
-                },
-                child: (_speechEnabled)
-                    ? const Icon(Icons.mic)
-                    : const Icon(Icons.mic_off),
-              ),
-              FloatingActionButton(
-                onPressed: () {
-                  setState(() {
-                    isPlaying = !isPlaying;
-                  });
-                },
-                child: (isPlaying)
-                    ? const Icon(Icons.stop)
-                    : const Icon(Icons.play_arrow),
-              ),
-            ],
-          ),
-        ),
-        body: Center(
-          child: SizedBox(
-            width: MediaQuery.of(context).size.width,
-            height: MediaQuery.of(context).size.height,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                SizedBox(
-                  height: MediaQuery.of(context).size.height / 2 - 52,
-                  child: ListView.builder(
-                    controller: _controller,
+      child: Container(
+        height: MediaQuery.of(context).size.height,
+        width: MediaQuery.of(context).size.width,
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: Column(
+          children: [
+            SizedBox(
+              height: (MediaQuery.of(context).size.height -
+                          3 * heightOfMiddleContainer) /
+                      2 -
+                  20,
+              width: MediaQuery.of(context).size.width,
+              child: Transform.flip(
+                flipY: true,
+                flipX: true,
+                child: ListView.builder(
+                    itemCount: secondUserListView.length,
+                    shrinkWrap: true,
+                    controller: _secondUserScrollController,
                     itemBuilder: (context, index) {
-                      return ListTile(
-                        title: InkWell(
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
                           onTap: () {
                             setState(() {
-                              outgoingTextIndex = index;
-                              incomingTextIndex = index;
+                              userModeIndex = index;
                             });
                           },
                           onLongPress: () {
+                            // delete that line from the list
                             setState(() {
-                              incomingText.removeAt(index);
-                              outgoingText.removeAt(index);
-                              if (index >= outgoingTextIndex) {
-                                outgoingTextIndex = 0;
+                              if (userMode) {
+                                firstUserInputs.removeAt(index);
+                                translatedFirstUserInputs.removeAt(index);
+                              } else {
+                                secondUserInputs.removeAt(index);
+                                translatedSecondUserInputs.removeAt(index);
                               }
+                              translateAll();
                             });
                           },
                           child: SizedBox(
                             height: 48,
                             child: Center(
                               child: Text(
-                                incomingText[index],
+                                secondUserListView[index],
                                 style: TextStyle(
-                                    color: (index == incomingTextIndex - 1)
-                                        ? Colors.yellow
-                                        : Colors.white),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                    itemCount: incomingText.length,
-                    shrinkWrap: true,
-                  ),
-                ),
-                const Divider(
-                  height: 10,
-                  indent: 20,
-                  endIndent: 20,
-                ),
-                SizedBox(
-                  height: MediaQuery.of(context).size.height / 2 - 52,
-                  child: ListView.builder(
-                    controller: _controller,
-                    itemBuilder: (context, index) {
-                      return ListTile(
-                        title: InkWell(
-                          onTap: () {
-                            setState(() {
-                              outgoingTextIndex = index;
-                              incomingTextIndex = index;
-                            });
-                          },
-                          onLongPress: () {
-                            setState(() {
-                              incomingText.removeAt(index);
-                              outgoingText.removeAt(index);
-                              if (index >= outgoingTextIndex) {
-                                outgoingTextIndex = 0;
-                              }
-                            });
-                          },
-                          child: SizedBox(
-                            height: 48,
-                            child: Center(
-                              child: Text(
-                                outgoingText[index],
-                                style: TextStyle(
-                                    color: (index == outgoingTextIndex - 1)
-                                        ? Colors.yellow
-                                        : Colors.white),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                    itemCount: outgoingText.length,
-                    shrinkWrap: true,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        appBar: AppBar(
-          title: const Text('Real Time Voice Translator'),
-          actions: [
-            IconButton(
-              onPressed: () {
-                showDialog(
-                    context: context,
-                    builder: (BuildContext context) {
-                      return AlertDialog(
-                        title: const Text('Settings'),
-                        content: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16.0),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: TextField(
-                                        controller: textController,
-                                        decoration: InputDecoration(
-                                          labelText: 'Enter Text',
-                                          labelStyle: TextStyle(
-                                              color: Colors.grey[800]),
-                                          fillColor: Colors.white,
-                                          focusColor: Colors.white,
-                                          hoverColor: Colors.white,
-                                          focusedBorder:
-                                              const OutlineInputBorder(
-                                            borderRadius: BorderRadius.all(
-                                                Radius.circular(15.0)),
-                                          ),
-                                          filled: true,
-                                          border: const OutlineInputBorder(
-                                            borderRadius: BorderRadius.all(
-                                                Radius.circular(10.0)),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    ElevatedButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            incomingText
-                                                .add(textController.text);
-                                          });
-                                          translateText(
-                                              textController.text, toCode);
-                                          textController.clear();
-                                        },
-                                        child: const Text('Add')),
-                                  ],
+                                  fontSize: 16,
+                                  color: (userModeIndex == index)
+                                      ? Colors.grey[300]
+                                      : Colors.grey[500],
                                 ),
                               ),
-                              const Text(
-                                'Speed',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                              Slider(
-                                value: rate.toDouble(),
-                                min: 0,
-                                max: 100,
-                                divisions: 100,
-                                label: rate.round().toString(),
-                                onChanged: (double value) {
-                                  setState(() {
-                                    rate = value.round();
-                                  });
-                                  flutterTts.setSpeechRate(rate / 100);
-                                },
-                              ),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  const Text(
-                                    'From',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                                  DropdownButton<String>(
-                                    dropdownColor: Colors.grey[800],
-                                    menuMaxHeight: 300,
-                                    value: fromCode,
-                                    items: fromLanguages
-                                        .map<DropdownMenuItem<String>>(
-                                            (String value) {
-                                      return DropdownMenuItem<String>(
-                                        value: value,
-                                        child: Text(value,
-                                            style: const TextStyle(
-                                                color: Colors.white)),
-                                      );
-                                    }).toList(),
-                                    onChanged: (String? value) {
-                                      setState(() {
-                                        fromCode = value!;
-                                      });
-                                    },
-                                  ),
-                                  const Text(
-                                    'To',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                                  DropdownButton<String>(
-                                    dropdownColor: Colors.grey[800],
-                                    menuMaxHeight: 300,
-                                    value: toCode,
-                                    items: fromLanguages
-                                        .map<DropdownMenuItem<String>>(
-                                            (String value) {
-                                      return DropdownMenuItem<String>(
-                                        value: value,
-                                        child: Text(value,
-                                            style: const TextStyle(
-                                                color: Colors.white)),
-                                      );
-                                    }).toList(),
-                                    onChanged: (String? value) {
-                                      setState(() {
-                                        toCode = value!;
-                                        outgoingText.clear();
-                                        translateTexts(incomingText, toCode);
-                                      });
-
-                                      flutterTts.setLanguage(toCode);
-                                    },
-                                  ),
-                                ],
-                              )
-                            ],
+                            ),
                           ),
                         ),
-                        actions: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                            child: const Text('Close'),
-                          ),
-                        ],
                       );
-                    });
-              },
-              icon: const Icon(Icons.settings),
+                    }),
+              ),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: SizedBox(
+                height: heightOfMiddleContainer,
+                child: DropdownButton<String>(
+                  dropdownColor: Colors.grey[800],
+                  menuMaxHeight: 300,
+                  value: secondUserLanguage,
+                  items:
+                      languages.map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Transform.rotate(
+                        angle: 3.14159,
+                        child: Text(value,
+                            style: const TextStyle(color: Colors.white)),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (String? value) {
+                    changeSecondUserLanguage(value!);
+                    if (userMode) {
+                      changeTTSLanguage(value);
+                    }
+                    if (!userMode) changeLocale(languages.indexOf(value));
+                    translateAll();
+                  },
+                ),
+              ),
+            ),
+            SizedBox(
+              height: heightOfMiddleContainer,
+              width: MediaQuery.of(context).size.width,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: _isListening ? _stopListening : _startListening,
+                    child: Icon(_speechtotext.isNotListening
+                        ? Icons.mic
+                        : Icons.mic_off),
+                  ),
+                  ElevatedButton(
+                      onPressed: () {
+                        changeUserMode();
+                        if (userMode) {
+                          setState(() {
+                            userModeIndex = 0;
+                            firstUserListView = firstUserInputs;
+                            secondUserListView = translatedFirstUserInputs;
+                          });
+                        } else {
+                          setState(() {
+                            userModeIndex = 0;
+                            secondUserListView = secondUserInputs;
+                            firstUserListView = translatedSecondUserInputs;
+                          });
+                        }
+                        changeLocale(languages.indexOf(secondUserLanguage));
+                        if (userMode) {
+                          changeTTSLanguage(secondUserLanguage);
+                        } else {
+                          changeTTSLanguage(firstUserLanguage);
+                        }
+                      },
+                      child: const Icon(Icons.swap_vert)),
+                  ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          isPlaying = !isPlaying;
+                        });
+                      },
+                      child:
+                          Icon((isPlaying) ? Icons.pause : Icons.play_arrow)),
+                  ElevatedButton(
+                      onPressed: () {
+                        showModalBottomSheet(
+                            context: context,
+                            builder: (BuildContext context) {
+                              return StatefulBuilder(
+                                builder: (BuildContext context,
+                                    StateSetter setState) {
+                                  return Container(
+                                    height: 300,
+                                    decoration: BoxDecoration(
+                                        color: Colors.grey[900],
+                                        borderRadius: const BorderRadius.only(
+                                            topLeft: Radius.circular(20),
+                                            topRight: Radius.circular(20))),
+                                    child: Column(
+                                      children: [
+                                        const SizedBox(height: 10),
+                                        const Text(
+                                          'Settings',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 20),
+                                        ),
+                                        const SizedBox(height: 30),
+                                        const Text(
+                                          'Volume',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        Slider(
+                                          value: volume.toDouble(),
+                                          min: 0,
+                                          max: 100,
+                                          onChanged: (double value) {
+                                            setState(() {
+                                              volume = value.toInt();
+                                            });
+                                            flutterTts.setVolume(value / 100);
+                                          },
+                                        ),
+                                        const Text(
+                                          'Pitch',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        Slider(
+                                          value: pitch.toDouble(),
+                                          min: 0,
+                                          max: 100,
+                                          onChanged: (double value) {
+                                            setState(() {
+                                              pitch = value.toInt();
+                                            });
+                                            flutterTts.setPitch(value / 100);
+                                          },
+                                        ),
+                                        const Text(
+                                          'Rate',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        Slider(
+                                          value: rate.toDouble(),
+                                          min: 0,
+                                          max: 100,
+                                          onChanged: (double value) {
+                                            setState(() {
+                                              rate = value.toInt();
+                                            });
+                                            flutterTts
+                                                .setSpeechRate(value / 100);
+                                            print("Rate: $rate");
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              );
+                            });
+                      },
+                      child: const Icon(Icons.settings))
+                ],
+              ),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: SizedBox(
+                height: heightOfMiddleContainer,
+                child: DropdownButton<String>(
+                  dropdownColor: Colors.grey[800],
+                  menuMaxHeight: 300,
+                  value: firstUserLanguage,
+                  items:
+                      languages.map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value,
+                          style: const TextStyle(color: Colors.white)),
+                    );
+                  }).toList(),
+                  onChanged: (String? value) {
+                    changeFirstUserLanguage(value!);
+                    if (!userMode) {
+                      changeTTSLanguage(value);
+                    }
+                    if (userMode) changeLocale(languages.indexOf(value));
+                    translateAll();
+                  },
+                ),
+              ),
+            ),
+            SizedBox(
+              height: (MediaQuery.of(context).size.height -
+                          3 * heightOfMiddleContainer) /
+                      2 -
+                  20,
+              width: MediaQuery.of(context).size.width,
+              child: ListView.builder(
+                  itemCount: firstUserListView.length,
+                  shrinkWrap: true,
+                  controller: _firstUserScrollController,
+                  itemBuilder: (context, index) {
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            isPlaying = false;
+                            //isListening = false;
+                            userModeIndex = index;
+                          });
+                        },
+                        onLongPress: () {
+                          //isListening = false;
+                          isPlaying = false;
+                          setState(() {
+                            if (userMode) {
+                              firstUserInputs.removeAt(index);
+                              translatedFirstUserInputs.removeAt(index);
+                            } else {
+                              secondUserInputs.removeAt(index);
+                              translatedSecondUserInputs.removeAt(index);
+                            }
+                            translateAll();
+                          });
+                        },
+                        child: SizedBox(
+                          height: 48,
+                          child: Center(
+                            child: Text(
+                              firstUserListView[index],
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: (userModeIndex == index)
+                                    ? Colors.grey[300]
+                                    : Colors.grey[500],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
             ),
           ],
         ),
       ),
     );
   }
-
-  void play() {
-    const oneSecond = Duration(seconds: 1);
-    const hundredMilliseconds = Duration(milliseconds: 100);
-    while (isPlaying) {
-      if (incomingTextIndex == incomingText.length) {
-        setState(() {
-          incomingTextIndex = 0;
-          outgoingTextIndex = 0;
-        });
-      }
-      flutterTts.speak(outgoingText[outgoingTextIndex]);
-      Timer.periodic(hundredMilliseconds, (Timer t) {});
-
-      setState(() {
-        incomingTextIndex++;
-        outgoingTextIndex++;
-      });
-    }
-    Timer.periodic(oneSecond, (Timer t) {play();});
-  }
 }
-/**
- * Container(
-    height: retracted ? 60 : 300,
-    decoration: BoxDecoration(
-    color: Colors.grey[800],
-    borderRadius: const BorderRadius.only(
-    topLeft: Radius.circular(20),
-    topRight: Radius.circular(20),
-    ),
-    ),
-    child: Center(
-    child: Column(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-    IconButton(
-    onPressed: () {
-    setState(() {
-    retracted = !retracted;
-    });
-    },
-    icon: (retracted)
-    ? const Icon(
-    Icons.arrow_drop_up,
-    color: Colors.white,
-    )
-    : const Icon(
-    Icons.arrow_drop_down,
-    color: Colors.white,
-    ),
-    ),
-    (retracted)
-    ? const SizedBox(
-    height: 0,
-    )
-    : Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-    child: Row(
-    children: [
-    Expanded(
-    child: TextField(
-    controller: textController,
-    decoration: InputDecoration(
-    labelText: 'Enter Text',
-    labelStyle:
-    TextStyle(color: Colors.grey[800]),
-    fillColor: Colors.white,
-    focusColor: Colors.white,
-    hoverColor: Colors.white,
-    focusedBorder: const OutlineInputBorder(
-    borderRadius:
-    BorderRadius.all(Radius.circular(15.0)),
-    ),
-    filled: true,
-    border: const OutlineInputBorder(
-    borderRadius:
-    BorderRadius.all(Radius.circular(10.0)),
-    ),
-    ),
-    ),
-    ),
-    ElevatedButton(
-    onPressed: () {
-    setState(() {
-    incomingText.add(textController.text);
-    });
-    translateText(textController.text, toCode);
-    textController.clear();
-    },
-    child: const Text('Add')),
-    ],
-    ),
-    ),
-    (retracted)
-    ? const SizedBox(
-    height: 0,
-    )
-    : Row(
-    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-    children: [
-    ElevatedButton(
-    onPressed: () {
-    if (incomingTextIndex == incomingText.length) {
-    setState(() {
-    incomingTextIndex = 0;
-    outgoingTextIndex = 0;
-    });
-    }
-    flutterTts.speak(outgoingText[outgoingTextIndex]);
-    setState(() {
-    incomingTextIndex++;
-    outgoingTextIndex++;
-    });
-    },
-    child: const Text('Start'),
-    ),
-    ElevatedButton(
-    onPressed: () {
-    flutterTts.stop();
-    },
-    child: const Text('Stop'),
-    ),
-    ],
-    ),
-    (retracted)
-    ? const SizedBox(
-    height: 0,
-    )
-    : const Text(
-    'Speed',
-    style: TextStyle(color: Colors.white),
-    ),
-    (retracted)
-    ? const SizedBox(
-    height: 0,
-    )
-    : Slider(
-    value: rate.toDouble(),
-    min: 0,
-    max: 100,
-    divisions: 100,
-    label: rate.round().toString(),
-    onChanged: (double value) {
-    setState(() {
-    rate = value.round();
-    });
-    flutterTts.setSpeechRate(rate / 100);
-    },
-    ),
-    (retracted)
-    ? const SizedBox(
-    height: 0,
-    )
-    : Row(
-    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-    children: [
-    const Text(
-    'From',
-    style: TextStyle(color: Colors.white),
-    ),
-    DropdownButton<String>(
-    dropdownColor: Colors.grey[800],
-    menuMaxHeight: 300,
-    value: fromCode,
-    items: fromLanguages
-    .map<DropdownMenuItem<String>>((String value) {
-    return DropdownMenuItem<String>(
-    value: value,
-    child: Text(value,
-    style:
-    const TextStyle(color: Colors.white)),
-    );
-    }).toList(),
-    onChanged: (String? value) {
-    setState(() {
-    fromCode = value!;
-    });
-    },
-    ),
-    const Text(
-    'To',
-    style: TextStyle(color: Colors.white),
-    ),
-    DropdownButton<String>(
-    dropdownColor: Colors.grey[800],
-    menuMaxHeight: 300,
-    value: toCode,
-    items: fromLanguages
-    .map<DropdownMenuItem<String>>((String value) {
-    return DropdownMenuItem<String>(
-    value: value,
-    child: Text(value,
-    style:
-    const TextStyle(color: Colors.white)),
-    );
-    }).toList(),
-    onChanged: (String? value) {
-    setState(() {
-    toCode = value!;
-    outgoingText.clear();
-    translateTexts(incomingText, toCode);
-    });
-
-    flutterTts.setLanguage(toCode);
-    },
-    ),
-    ],
-    )
-    ],
-    ),
-    ),
-    ),
- */
