@@ -25,5 +25,10 @@ public final class GeneratedPluginRegistrant {
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin speech_to_text, com.csdcorp.speech_to_text.SpeechToTextPlugin", e);
     }
+    try {
+      flutterEngine.getPlugins().add(new dev.speech_to_text_google.speech_to_text_google.SpeechToTextGooglePlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin speech_to_text_google_dialog, dev.speech_to_text_google.speech_to_text_google.SpeechToTextGooglePlugin", e);
+    }
   }
 }
