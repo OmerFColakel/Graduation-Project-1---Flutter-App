@@ -4,8 +4,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:speech_to_text_google_dialog/speech_to_text_google_dialog.dart';
 import 'package:translator/translator.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 
 void main() {
   runApp(const MyApp());
@@ -82,14 +82,11 @@ class _NewHomePageState extends State<NewHomePage> {
   String secondUserLanguage = 'es-ES';
   final ScrollController _firstUserScrollController = ScrollController();
   final ScrollController _secondUserScrollController = ScrollController();
-  final SpeechToText _speechtotext = SpeechToText();
-  bool _speechEnabled = false;
 
-  bool _isListening = false;
   String _wordsSpoken = '';
-  String _selectedLocaleId = 'tr_TR';
-  Timer? _timer;
-  final List<String> _localeID = ['tr-TR', 'en-US', 'es-ES', 'de-DE', 'ru-RU'];
+
+  bool isListening = false;
+  bool continueListening = true;
 
   @override
   void initState() {
@@ -97,72 +94,48 @@ class _NewHomePageState extends State<NewHomePage> {
     initTts();
     _alwaysOnSpeaking();
     translateAll();
-    _initSpeech();
+    alwaysOnListening();
   }
 
-  printLocales() async {
-    var locales = await _speechtotext.locales();
-    for (var local in locales) {
-      debugPrint(local.name);
-      debugPrint(local.localeId);
-    }
-  }
+  void alwaysOnListening() async {
+    while (continueListening) {
+      if (isListening) {
+        bool isServiceAvailable =
+            await SpeechToTextGoogleDialog.getInstance().showGoogleDialog(
+          onTextReceived: (data) {
+            setState(() {
+              if (userMode) {
+                firstUserInputs.add(data);
+                translatedFirstUserInputs.add('');
+                translateFirstUserInput(data, firstUserInputs.length - 1);
+              } else {
+                secondUserInputs.add(data);
+                translatedSecondUserInputs.add('');
+                translateSecondUserInput(data, secondUserInputs.length - 1);
+              }
+            });
+          },
+          locale: userMode ? firstUserLanguage : secondUserLanguage,
+        );
 
-  void _initSpeech() async {
-    _speechEnabled = await _speechtotext.initialize();
-    setState(() {});
-  }
-
-  void _startListening() async {
-    setState(() {
-      _isListening = true;
-    });
-
-    while (_isListening) {
-      await _speechtotext.listen(
-        onResult: _onSpeechResult,
-        onSoundLevelChange: _onSoundLevelChange,
-        localeId: _selectedLocaleId,
-      );
-
-      await Future.delayed(const Duration(seconds: 1));
-    }
-  }
-
-  void _stopListening() async {
-    setState(() {
-      _isListening = false;
-    });
-    _speechtotext.stop();
-  }
-
-  void _onSoundLevelChange(double level) {
-    if (_timer != null && _timer!.isActive) {
-      _timer!.cancel();
-    }
-    _timer = Timer(const Duration(milliseconds: 500), _onTimeout);
-  }
-
-  void _onTimeout() {
-    debugPrint(_wordsSpoken);
-    if (_wordsSpoken.isNotEmpty) {
-      debugPrint(_wordsSpoken);
-      setState(() {
-        if (userMode) {
-          firstUserInputs.add(_wordsSpoken);
-        } else {
-          secondUserInputs.add(_wordsSpoken);
+        if (!isServiceAvailable) {
+          setState(() {
+            isListening = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('Service is not available'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 16,
+              right: 16,
+            ),
+          ));
         }
-        _wordsSpoken = '';
-      });
-      translateAll();
+      }
+      await Future.delayed(const Duration(seconds: 5));
     }
-  }
-
-  void _onSpeechResult(result) {
-    setState(() {
-      _wordsSpoken = result.recognizedWords;
-    });
   }
 
   @override
@@ -182,34 +155,41 @@ class _NewHomePageState extends State<NewHomePage> {
     while (true) {
       if (isPlaying) {
         if (userMode) {
-          print(translatedFirstUserInputs[userModeIndex]);
-          await flutterTts.speak(translatedFirstUserInputs[userModeIndex]);
-          await Future.delayed(Duration(
-              seconds:
-                  ((translatedFirstUserInputs[userModeIndex].length ~/ 7))));
-          setState(() {
-            userModeIndex++;
-            if (userModeIndex >= translatedFirstUserInputs.length) {
-              setState(() {
-                userModeIndex = 0;
-                isPlaying = false;
-              });
-            }
-          });
+          if (translatedFirstUserInputs.isEmpty) {
+            await Future.delayed(const Duration(seconds: 2));
+          } else {
+            print(translatedFirstUserInputs[userModeIndex]);
+            await flutterTts.speak(translatedFirstUserInputs[userModeIndex]);
+            await Future.delayed(Duration(
+                seconds:
+                    ((translatedFirstUserInputs[userModeIndex].length ~/ 7))));
+            setState(() {
+              userModeIndex++;
+              if (userModeIndex >= translatedFirstUserInputs.length) {
+                setState(() {
+                  userModeIndex = 0;
+                });
+              }
+            });
+          }
         } else {
-          print(translatedSecondUserInputs[userModeIndex]);
-          await flutterTts.speak(translatedSecondUserInputs[userModeIndex]);
-          await Future.delayed(Duration(
-              seconds: translatedFirstUserInputs[userModeIndex].length ~/ 7));
-          setState(() {
-            userModeIndex++;
-            if (userModeIndex >= translatedSecondUserInputs.length) {
-              setState(() {
-                userModeIndex = 0;
-                isPlaying = false;
-              });
-            }
-          });
+          if (translatedSecondUserInputs.isEmpty) {
+            await Future.delayed(const Duration(seconds: 2));
+          } else {
+            print(translatedSecondUserInputs[userModeIndex]);
+            await flutterTts.speak(translatedSecondUserInputs[userModeIndex]);
+            await Future.delayed(Duration(
+                seconds:
+                    ((translatedSecondUserInputs[userModeIndex].length ~/ 7))));
+            setState(() {
+              userModeIndex++;
+              if (userModeIndex >= translatedSecondUserInputs.length) {
+                setState(() {
+                  userModeIndex = 0;
+                });
+              }
+            });
+          }
         }
       } else {
         await Future.delayed(const Duration(seconds: 2));
@@ -236,6 +216,11 @@ class _NewHomePageState extends State<NewHomePage> {
   void translateAll() {
     translateAllFirstUserInputs();
     translateAllSecondUserInputs();
+    // print all lists
+    print('First User Inputs: $firstUserInputs');
+    print('Second User Inputs: $secondUserInputs');
+    print('Translated First User Inputs: $translatedFirstUserInputs');
+    print('Translated Second User Inputs: $translatedSecondUserInputs');
     setState(() {
       if (userMode) {
         firstUserListView = firstUserInputs;
@@ -258,11 +243,9 @@ class _NewHomePageState extends State<NewHomePage> {
     for (int i = 0; i < firstUserInputs.length; i++) {
       translatedFirstUserInputs.add('');
     }
-    print("First user inputs length1: ${firstUserInputs.length}");
     for (int i = 0; i < firstUserInputs.length; i++) {
       translateFirstUserInput(firstUserInputs[i], i);
     }
-    print("First user inputs length2: ${firstUserInputs.length}");
   }
 
   void translateAllSecondUserInputs() {
@@ -308,12 +291,6 @@ class _NewHomePageState extends State<NewHomePage> {
   void addTranslatedSecondUserInput(String input, int index) {
     setState(() {
       translatedSecondUserInputs[index] = input;
-    });
-  }
-
-  void changeLocale(int index) {
-    setState(() {
-      _selectedLocaleId = _localeID[index];
     });
   }
 
@@ -363,6 +340,7 @@ class _NewHomePageState extends State<NewHomePage> {
                           },
                           child: SizedBox(
                             height: 48,
+                            width: MediaQuery.of(context).size.width,
                             child: Center(
                               child: Text(
                                 secondUserListView[index],
@@ -404,7 +382,10 @@ class _NewHomePageState extends State<NewHomePage> {
                     if (userMode) {
                       changeTTSLanguage(value);
                     }
-                    if (!userMode) changeLocale(languages.indexOf(value));
+                    if (!userMode) {
+                      secondUserInputs.clear();
+                      translatedSecondUserInputs.clear();
+                    }
                     translateAll();
                   },
                 ),
@@ -419,10 +400,12 @@ class _NewHomePageState extends State<NewHomePage> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   ElevatedButton(
-                    onPressed: _isListening ? _stopListening : _startListening,
-                    child: Icon(_speechtotext.isNotListening
-                        ? Icons.mic
-                        : Icons.mic_off),
+                    onPressed: () {
+                      setState(() {
+                        isListening = !isListening;
+                      });
+                    },
+                    child: Icon((isListening) ? Icons.mic : Icons.mic_off),
                   ),
                   ElevatedButton(
                       onPressed: () {
@@ -432,15 +415,17 @@ class _NewHomePageState extends State<NewHomePage> {
                             userModeIndex = 0;
                             firstUserListView = firstUserInputs;
                             secondUserListView = translatedFirstUserInputs;
+                            isPlaying = false;
                           });
                         } else {
                           setState(() {
                             userModeIndex = 0;
                             secondUserListView = secondUserInputs;
                             firstUserListView = translatedSecondUserInputs;
+                            isPlaying = false;
                           });
                         }
-                        changeLocale(languages.indexOf(secondUserLanguage));
+
                         if (userMode) {
                           changeTTSLanguage(secondUserLanguage);
                         } else {
@@ -560,7 +545,10 @@ class _NewHomePageState extends State<NewHomePage> {
                     if (!userMode) {
                       changeTTSLanguage(value);
                     }
-                    if (userMode) changeLocale(languages.indexOf(value));
+                    if (userMode) {
+                      firstUserInputs.clear();
+                      translatedFirstUserInputs.clear();
+                    }
                     translateAll();
                   },
                 ),
@@ -583,7 +571,6 @@ class _NewHomePageState extends State<NewHomePage> {
                         onTap: () {
                           setState(() {
                             isPlaying = false;
-                            //isListening = false;
                             userModeIndex = index;
                           });
                         },
