@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text_google_dialog/speech_to_text_google_dialog.dart';
 import 'package:translator/translator.dart';
@@ -70,11 +71,7 @@ class _NewHomePageState extends State<NewHomePage> {
   String secondUserLanguage = 'es-ES';
   final ScrollController _firstUserScrollController = ScrollController();
   final ScrollController _secondUserScrollController = ScrollController();
-
-  String _wordsSpoken = '';
-
   bool isListening = false;
-  bool continueListening = true;
 
   @override
   void initState() {

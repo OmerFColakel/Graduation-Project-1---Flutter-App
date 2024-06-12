@@ -39,6 +39,7 @@ dependencies:
   translator: ^1.0.0
   speech_to_text: ^6.6.1
   speech_to_text_google_dialog: ^0.0.6
+  flutter_sound: ^9.4.15
 
 dev_dependencies:
   flutter_test:
