@@ -46,20 +46,8 @@ class _NewHomePageState extends State<NewHomePage> {
   // if userMode is true = first user, false = second user
   // first user bottom part of the screen and second user top part of the screen
   bool userMode = true;
-  List<String> firstUserInputs = [
-    'Hello, how are you?',
-    'I am fine, thank you.',
-    'What are you doing?',
-    'I am learning to use Text to Speech.',
-    'That is great.'
-  ];
-  List<String> secondUserInputs = [
-    '¿Hola, cómo estás?',
-    'Estoy bien gracias.',
-    '¿Qué estás haciendo?',
-    'Estoy aprendiendo a utilizar Texto a Voz.',
-    "Eso es genial."
-  ];
+  List<String> firstUserInputs = [];
+  List<String> secondUserInputs = [];
   List<String> translatedFirstUserInputs = [];
   List<String> translatedSecondUserInputs = [];
   List<String> firstUserListView = [];
@@ -78,7 +66,7 @@ class _NewHomePageState extends State<NewHomePage> {
     'de-DE',
     'ru-RU'
   ];
-  String firstUserLanguage = 'tr-TR';
+  String firstUserLanguage = 'en-US';
   String secondUserLanguage = 'es-ES';
   final ScrollController _firstUserScrollController = ScrollController();
   final ScrollController _secondUserScrollController = ScrollController();
@@ -94,47 +82,42 @@ class _NewHomePageState extends State<NewHomePage> {
     initTts();
     _alwaysOnSpeaking();
     translateAll();
-    alwaysOnListening();
   }
 
   void alwaysOnListening() async {
-    while (continueListening) {
-      if (isListening) {
-        bool isServiceAvailable =
-            await SpeechToTextGoogleDialog.getInstance().showGoogleDialog(
-          onTextReceived: (data) {
-            setState(() {
-              if (userMode) {
-                firstUserInputs.add(data);
-                translatedFirstUserInputs.add('');
-                translateFirstUserInput(data, firstUserInputs.length - 1);
-              } else {
-                secondUserInputs.add(data);
-                translatedSecondUserInputs.add('');
-                translateSecondUserInput(data, secondUserInputs.length - 1);
-              }
-            });
-          },
-          locale: userMode ? firstUserLanguage : secondUserLanguage,
-        );
+    if (!isListening) return;
 
-        if (!isServiceAvailable) {
-          setState(() {
-            isListening = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('Service is not available'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).size.height - 100,
-              left: 16,
-              right: 16,
-            ),
-          ));
-        }
-      }
-      await Future.delayed(const Duration(seconds: 5));
+    bool isServiceAvailable =
+        await SpeechToTextGoogleDialog.getInstance().showGoogleDialog(
+      onTextReceived: (data) {
+        setState(() {
+          if (userMode) {
+            firstUserInputs.add(data);
+            translatedFirstUserInputs.add('');
+            translateFirstUserInput(data, firstUserInputs.length - 1);
+          } else {
+            secondUserInputs.add(data);
+            translatedSecondUserInputs.add('');
+            translateSecondUserInput(data, secondUserInputs.length - 1);
+          }
+        });
+
+        alwaysOnListening();
+      },
+      locale: userMode ? firstUserLanguage : secondUserLanguage,
+    );
+
+    if (!isServiceAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Service is not available'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).size.height - 100,
+          left: 16,
+          right: 16,
+        ),
+      ));
     }
   }
 
@@ -216,11 +199,6 @@ class _NewHomePageState extends State<NewHomePage> {
   void translateAll() {
     translateAllFirstUserInputs();
     translateAllSecondUserInputs();
-    // print all lists
-    print('First User Inputs: $firstUserInputs');
-    print('Second User Inputs: $secondUserInputs');
-    print('Translated First User Inputs: $translatedFirstUserInputs');
-    print('Translated Second User Inputs: $translatedSecondUserInputs');
     setState(() {
       if (userMode) {
         firstUserListView = firstUserInputs;
@@ -274,6 +252,8 @@ class _NewHomePageState extends State<NewHomePage> {
     Translation translation =
         await translator.translate(input, to: secondUserLanguage.split('-')[0]);
     addTranslatedFirstUserInput(translation.text, index);
+    print("First User Input: $input");
+    print("First User Translation: ${translation.text}");
   }
 
   void translateSecondUserInput(String input, int index) async {
@@ -344,6 +324,9 @@ class _NewHomePageState extends State<NewHomePage> {
                             child: Center(
                               child: Text(
                                 secondUserListView[index],
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 16,
                                   color: (userModeIndex == index)
@@ -362,32 +345,43 @@ class _NewHomePageState extends State<NewHomePage> {
               color: Colors.transparent,
               child: SizedBox(
                 height: heightOfMiddleContainer,
-                child: DropdownButton<String>(
-                  dropdownColor: Colors.grey[800],
-                  menuMaxHeight: 300,
-                  value: secondUserLanguage,
-                  items:
-                      languages.map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Transform.rotate(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    DropdownButton<String>(
+                      dropdownColor: Colors.grey[800],
+                      menuMaxHeight: 300,
+                      value: secondUserLanguage,
+                      items: languages
+                          .map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Transform.rotate(
+                            angle: 3.14159,
+                            child: Text(value,
+                                style: const TextStyle(color: Colors.white)),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (String? value) {
+                        changeSecondUserLanguage(value!);
+                        if (userMode) {
+                          changeTTSLanguage(value);
+                        }
+                        if (!userMode) {
+                          secondUserInputs.clear();
+                          translatedSecondUserInputs.clear();
+                        }
+                        translateAll();
+                      },
+                    ),
+                    Transform.rotate(
                         angle: 3.14159,
-                        child: Text(value,
-                            style: const TextStyle(color: Colors.white)),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (String? value) {
-                    changeSecondUserLanguage(value!);
-                    if (userMode) {
-                      changeTTSLanguage(value);
-                    }
-                    if (!userMode) {
-                      secondUserInputs.clear();
-                      translatedSecondUserInputs.clear();
-                    }
-                    translateAll();
-                  },
+                        child: Text(
+                          (userMode) ? 'To:' : 'From:',
+                          style: const TextStyle(color: Colors.white),
+                        )),
+                  ],
                 ),
               ),
             ),
@@ -404,6 +398,9 @@ class _NewHomePageState extends State<NewHomePage> {
                       setState(() {
                         isListening = !isListening;
                       });
+                      if (isListening) {
+                        alwaysOnListening();
+                      }
                     },
                     child: Icon((isListening) ? Icons.mic : Icons.mic_off),
                   ),
@@ -496,23 +493,6 @@ class _NewHomePageState extends State<NewHomePage> {
                                             flutterTts.setPitch(value / 100);
                                           },
                                         ),
-                                        const Text(
-                                          'Rate',
-                                          style: TextStyle(color: Colors.white),
-                                        ),
-                                        Slider(
-                                          value: rate.toDouble(),
-                                          min: 0,
-                                          max: 100,
-                                          onChanged: (double value) {
-                                            setState(() {
-                                              rate = value.toInt();
-                                            });
-                                            flutterTts
-                                                .setSpeechRate(value / 100);
-                                            print("Rate: $rate");
-                                          },
-                                        ),
                                       ],
                                     ),
                                   );
@@ -528,29 +508,38 @@ class _NewHomePageState extends State<NewHomePage> {
               color: Colors.transparent,
               child: SizedBox(
                 height: heightOfMiddleContainer,
-                child: DropdownButton<String>(
-                  dropdownColor: Colors.grey[800],
-                  menuMaxHeight: 300,
-                  value: firstUserLanguage,
-                  items:
-                      languages.map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value,
-                          style: const TextStyle(color: Colors.white)),
-                    );
-                  }).toList(),
-                  onChanged: (String? value) {
-                    changeFirstUserLanguage(value!);
-                    if (!userMode) {
-                      changeTTSLanguage(value);
-                    }
-                    if (userMode) {
-                      firstUserInputs.clear();
-                      translatedFirstUserInputs.clear();
-                    }
-                    translateAll();
-                  },
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      (userMode) ? 'From:' : 'To:',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    DropdownButton<String>(
+                      dropdownColor: Colors.grey[800],
+                      menuMaxHeight: 300,
+                      value: firstUserLanguage,
+                      items: languages
+                          .map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value,
+                              style: const TextStyle(color: Colors.white)),
+                        );
+                      }).toList(),
+                      onChanged: (String? value) {
+                        changeFirstUserLanguage(value!);
+                        if (!userMode) {
+                          changeTTSLanguage(value);
+                        }
+                        if (userMode) {
+                          firstUserInputs.clear();
+                          translatedFirstUserInputs.clear();
+                        }
+                        translateAll();
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -593,6 +582,9 @@ class _NewHomePageState extends State<NewHomePage> {
                           child: Center(
                             child: Text(
                               firstUserListView[index],
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 16,
                                 color: (userModeIndex == index)
